@@ -1,0 +1,40 @@
+FROM ubuntu:20.04 AS builder
+ARG DEBIAN_FRONTEND=noninteractive
+RUN touch 1
+ENV TZ=Europe/Moscow
+RUN apt-get update -y
+RUN apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    wget \
+    unzip \
+    clang-tidy \
+    clang-format
+WORKDIR /app
+RUN wget -q -O - https://files.viva64.com/etc/pubkey.txt | apt-key add -
+RUN wget -O /etc/apt/sources.list.d/viva64.list https://files.viva64.com/etc/viva64.list
+RUN apt-get update -y 
+ADD pkglist .
+RUN apt-get install -y $(cat pkglist)
+RUN git clone --recurse-submodules https://github.com/aws/aws-sdk-cpp
+RUN mkdir aws_build && cd aws_build && cmake ../aws-sdk-cpp -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3" && make && make install
+RUN rm -rf ./aws-sdk-cpp
+RUN mkdir build && mkdir /output
+RUN pwd
+COPY . ./
+RUN pwd && ls -la . && ls -la ./src
+RUN cd build && cmake -DCMAKE_BUILD_TYPE=Release /app
+RUN cmake --build /app/build --target libav_test
+CMD /app/build/libav_test
+
+FROM ubuntu:20.04
+ENV PROD_BUILD=1
+COPY --from=builder /app/build/libav_test /app/libav_test
+RUN apt-get update -y && apt-get install -y libyaml-cpp0.6 libuv1 libavfilter7 libavformat58 libavcodec58 libfmt-ocaml libcurl4 && apt-get clean autoclean && apt-get autoremove --yes && rm -rf /var/lib/{apt,dpkg,cache,log}/
+COPY --from=builder /usr/local/lib/ /usr/local/lib/
+COPY --from=builder /app/aws_build /app/aws_build
+COPY --from=builder /app/config.yaml /app/config.yaml
+WORKDIR /app
+CMD /app/libav_test config.yaml

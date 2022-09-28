@@ -1,0 +1,33 @@
+streams:
+  - src: rtsp://192.168.2.14:8554/live.stream
+    name: name_1
+    options:
+      - key: 'use_wallclock_as_timestamps '
+        value: '1'
+      - key: 'rtsp_transport'
+        value: 'tcp'
+#      - key: 'buffer_size'
+#        value: '4096000000'
+    dst:
+      - path: /output/{camera_name}/file-unmuxing-%Y-%m-%d-{unixtime}.ts
+        file_duration_sec: 300
+        s3_target: default
+#      - path: ../output/480/file-480-{Y}-{m}-{d}-{unixtime}.ts
+#        bitrate: 5000
+#        height: 480
+#        options:
+#          - key: 'preset'
+#            value: 'slow'
+#          - key: 'crf'
+#            value: '40'
+rabbitmq:
+  url: librabbitmq
+  interval_sec: 1
+
+s3_profiles:
+  - name: default
+    endpoint: '192.168.2.14:9000'
+    access_key_id: minioadmin
+    secret_key: minioadmin
+    bucket_name: my-first-bucket
+    verify_ssl: false

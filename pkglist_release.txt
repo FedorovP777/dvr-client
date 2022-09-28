@@ -1,0 +1,14 @@
+libavcodec-dev
+libavformat-dev
+libavdevice-dev
+libavfilter-dev
+libyaml-cpp-dev
+libfmt-dev
+zlib1g-dev
+uuid-dev
+libuv1-dev
+pvs-studio
+libcurl4-openssl-dev
+libssl-dev
+zlib1g-dev
+libpulse-dev

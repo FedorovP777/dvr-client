@@ -1,0 +1,98 @@
+image: ubuntu:20.04
+
+stages:
+  - build
+  - test
+  - build_release
+
+.job_template:
+  variables:
+    IMAGE_TAG: $CI_REGISTRY_IMAGE:latest
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+  services:
+    - name: docker:19-dind
+      alias: docker
+      # in our experience although you'd assume this would be sufficient, this did
+      # nothing to prevent connection errors without `DOCKER_TLS_CERTDIR` being set
+      # to an empty string, and I would call that beyond mildly infuriating.
+      command: [ "--tls=false" ]
+  image: docker:19.03.12
+
+BuilReleaseImage:
+  extends: .job_template
+  variables:
+    IMAGE_TAG: $CI_REGISTRY_IMAGE:release
+  stage: build_release
+  when: manual
+  needs: [ ]
+  script:
+    - echo $IMAGE_TAG
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -f Dockerfile.release -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+
+BuildBaseImage:
+  extends: .job_template
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - Dockerfile
+        - Dockerfile
+        - pkglist
+  script:
+    - echo $IMAGE_TAG
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+
+.job_template_1: &test
+  stage: test
+  needs:
+    - job: BuildBaseImage
+      optional: true
+  image:
+    name: $CI_REGISTRY_IMAGE:latest
+    entrypoint: [ "" ]
+
+PVS-Studio:
+  <<: *test
+  script:
+    - |
+      cp -r ./ /app
+      cd /app
+      pwd
+      pvs-studio-analyzer credentials PVS-Studio Free FREE-FREE-FREE-FREE
+      cmake .
+      cmake --build . --target pvs-studio
+
+Tests:
+  <<: *test
+  script:
+    - |
+      cp -r ./ /app
+      cd /app
+      cmake .
+      cmake --build . --target run_tests
+      ./run_tests
+
+ClantFormat:
+  <<: *test
+  script:
+    - |
+      cp -r ./ /app
+      cd /app
+      find ./src -iname *.h -o -iname *.cpp | xargs clang-format -style=file --dry-run --Werror -assume-filename=.clang-tidy
+
+ClantTidy:
+  <<: *test
+  script:
+    - |
+      cp -r ./ /app
+      cd /app
+      cmake .
+      cmake --build . --target clang_tidy
+
+
+

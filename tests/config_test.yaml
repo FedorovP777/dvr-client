@@ -1,0 +1,33 @@
+streams:
+  - src: rtsp://11.11.11.11:554/test
+    name: name_1
+    options:
+      - key: 'use_wallclock_as_timestamps '
+        value: '1'
+      - key: 'rtsp_transport'
+        value: 'tcp'
+      - key: 'buffer_size'
+        value: '10'
+    dst: 
+      - path: file-480-%Y-%m-%d-{unixtime}.ts
+        file_duration_sec: 900
+        bitrate: 5000
+        height: 480
+        options:
+          - key: 'preset'
+            value: 'slow'
+          - key: 'crf'
+            value: '40'
+      - path: /output/file-unmuxing-%Y-%m-%d-{unixtime}.ts
+        file_duration_sec: 900
+rabbitmq:
+  url: librabbitmq
+  interval_sec: 1
+
+s3_profiles:
+  - name: default
+    endpoint: '192.168.2.14:9000'
+    access_key_id: access_key_id
+    secret_key: secret_key
+    bucket_name: my-first-bucket
+    verify_ssl: false
