@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <fmt/core.h>
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/utils/logging/LogLevel.h>
@@ -16,37 +17,45 @@
 #include "ConfigService.h"
 namespace fs = std::filesystem;
 using namespace Aws;
+struct ResultUploadFile
+{
+    string filename;
+    uintmax_t size;
+    string dst;
+    string dst_name;
+    bool is_success = true;
+    string error_message;
+};
 class S3Service
 {
 public:
-    static void putObject(string filePath, S3Profile * s3ProfileIn)
+    static ResultUploadFile * putObject(string filePath, const S3Profile * s3Profile)
     {
         // The Aws::SDKOptions struct contains SDK configuration options.
         // An instance of Aws::SDKOptions is passed to the Aws::InitAPI and
         // Aws::ShutdownAPI methods.  The same instance should be sent to both
         // methods.
+        S3Profile s3_profile = *s3Profile;
+        if (s3_profile.bucketName.empty() || s3_profile.endpoint.empty() || filePath.empty() || !fs::exists(fs::path(filePath)))
+        {
+            return nullptr;
+        }
+        string filename = fs::path(filePath).filename();
+        string upload_path = filename;
         SDKOptions options;
-        S3Profile s3_profile;
-        s3_profile.accessKeyId = s3ProfileIn->accessKeyId;
-        s3_profile.bucketName = s3ProfileIn->bucketName;
-        s3_profile.endpoint = s3ProfileIn->endpoint;
-        s3_profile.secretKey = s3ProfileIn->secretKey;
-        s3_profile.verifySsl = s3ProfileIn->verifySsl;
-        //    string filePath = *filepathIn;
         options.loggingOptions.logLevel = Utils::Logging::LogLevel::Debug;
         Auth::AWSCredentials credentials;
 
         // The AWS SDK for C++ must be initialized by calling Aws::InitAPI.
         InitAPI(options);
         {
-            //    S3::S3Client client;
-            Aws::Client::ClientConfiguration clientConfig;
+            Aws::Client::ClientConfiguration client_config;
             credentials.SetAWSAccessKeyId(Aws::String(s3_profile.accessKeyId));
             credentials.SetAWSSecretKey(Aws::String(s3_profile.secretKey));
-            clientConfig.endpointOverride = s3_profile.endpoint;
-            clientConfig.verifySSL = s3_profile.verifySsl;
-            clientConfig.scheme = Aws::Http::Scheme::HTTP;
-            Aws::S3::S3Client client(credentials, clientConfig, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
+            client_config.endpointOverride = s3_profile.endpoint;
+            client_config.verifySSL = s3_profile.verifySsl;
+            client_config.scheme = Aws::Http::Scheme::HTTP;
+            Aws::S3::S3Client client(credentials, client_config, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
 
             auto outcome = client.ListBuckets();
             if (outcome.IsSuccess())
@@ -63,34 +72,38 @@ public:
             }
 
             const Aws::String bucket_name = s3_profile.bucketName;
-            // TODO: Create a file called "my-file.txt" in the local folder where your
-            // executables are built to.
-            const Aws::String object_name = fs::path(filePath).filename();
+            cout << "asdasdasd " << s3_profile.s3_folder << endl;
+
+            if (!s3_profile.s3_folder.empty())
+            {
+                upload_path = fmt::format("{}{}", s3_profile.s3_folder, filename);
+            }
+
+            const Aws::String object_name = upload_path;
             const Aws::String file = filePath;
             // TODO: Set to the AWS Region in which the bucket was created.
             //    const Aws::String region = "us-east-1";
             Aws::S3::Model::PutObjectRequest request;
-            //    request.SetBucket(bucket_name);
-            //    request.SetKey(object_name);
             request.WithBucket(bucket_name.c_str()).WithKey(object_name.c_str());
             std::shared_ptr<Aws::IOStream> input_data
                 = Aws::MakeShared<Aws::FStream>("SampleAllocationTag", file.c_str(), std::ios_base::in | std::ios_base::binary);
             request.SetBody(input_data);
 
-            Aws::S3::Model::PutObjectOutcome outcome1 = client.PutObject(request);
+            Aws::S3::Model::PutObjectOutcome put_object_result = client.PutObject(request);
 
-            if (outcome1.IsSuccess())
+            if (put_object_result.IsSuccess())
             {
                 std::cout << "Added object '" << object_name << "' to bucket '" << bucket_name << "'.";
             }
             else
             {
-                std::cout << "Error: PutObject: " << outcome1.GetError().GetMessage() << std::endl;
+                std::cout << "Error: PutObject: " << put_object_result.GetError().GetMessage() << std::endl;
             }
         }
 
         // Before the application terminates, the SDK must be shut down.
-      //  ShutdownAPI(options);
+        //        ShutdownAPI(options);
+        return new ResultUploadFile{filePath, fs::file_size(fs::path(filePath)), upload_path};
     }
 };
 #endif // MY_PROJECT_SRC_S3SERVICE_H_

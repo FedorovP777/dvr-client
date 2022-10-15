@@ -28,3 +28,6 @@ Can be many destination stream at source stream
 | secret_key  | AWS secret access key |
 | bucket_name  | Bucket name |
 | verify_ssl  | Whether or not to use SSL. By default, SSL is used. Note that not all services support non-ssl connections |
+
+**Architecture**  
+![](readme_1.jpg "")

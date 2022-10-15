@@ -24,6 +24,7 @@ extern "C" {
 #include "FormatFilename.h"
 #include "Rescale.h"
 #include "S3Service.h"
+
 namespace fs = std::filesystem;
 class OutputStream
 {
@@ -60,14 +61,6 @@ public:
         string camera_name_)
         : outFilenameTemplate(outFilenameTemplate_)
         , output_stream_setting(&outputStreamSetting)
-        //        , isRescale(outputStreamSetting.rescale)
-        //        , bitrate(outputStreamSetting.bitrate)
-        //        , time_base(outputStreamSetting.time_base)
-        //        , gop(outputStreamSetting.gop)
-        //        , max_b_frames(outputStreamSetting.max_b_frames)
-        //        , encOptions(outputStreamSetting.options)
-        //        , fileDurationSec(outputStreamSetting.file_duration_sec)
-        //        , s3profile(outputStreamSetting.s3_profile)
         , enc_ctx(nullptr)
         , camera_name(camera_name_)
     {
@@ -200,27 +193,37 @@ public:
 
     void updateOutputFilename()
     {
-        string new_filename = FormatFilename::formatting(this->outFilenameTemplate, this->camera_name);
-        cout << new_filename << endl;
-
-        if (!this->filename.empty() && output_stream_setting->s3_profile != nullptr)
+        /**
+         * Create new file and upload complete file to s3
+         */
+        string previous_filename = this->filename;
+        this->filename = FormatFilename::formatting(this->outFilenameTemplate, this->camera_name);
+        this->setOutputFilename(this->filename);
+        this->prevIntervalSec = this->currentTimestampSec;
+        LOG("updateOutputFilename")
+        if (!previous_filename.empty() && output_stream_setting->s3_profile != nullptr)
         {
+            cout << camera_name << "camera_name" << endl;
             auto * async = new uv_async_t;
             auto * task = new UploadToS3Task;
-            task->filename = new_filename;
+            task->filename = previous_filename;
+            task->camera_name = this->camera_name;
+            task->dest_name = this->output_stream_setting->name;
+            task->dest = this->dest;
             task->s3_profile = output_stream_setting->s3_profile;
+            task->notification_endpoint = output_stream_setting->notification_endpoint;
+            cout << output_stream_setting->notification_endpoint->url << endl;
             async->data = (void *)task;
             uv_async_init(uv_default_loop(), async, EventService::finishWriteFragmentAsync);
             uv_async_send(async);
         }
-
-        this->filename = new_filename;
-        this->setOutputFilename(this->filename);
-        this->prevIntervalSec = this->currentTimestampSec;
     }
 
-    void setOutputFilename(string & dest_) const
+    void setOutputFilename(const string & dest_) const
     {
+        /**
+         * Close current and open new file for write
+         */
         av_write_trailer(this->output_context->cntx);
         avio_closep(&this->output_context->cntx->pb);
 

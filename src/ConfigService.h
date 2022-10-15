@@ -12,7 +12,14 @@
 #include "Options.h"
 #include "string"
 #include "yaml-cpp/yaml.h"
+#include "utils.h"
 using namespace std;
+struct NotificationEndpoint
+{
+    string url;
+    string access_key;
+    bool enable_notification;
+};
 struct S3Profile
 {
     string name;
@@ -20,10 +27,12 @@ struct S3Profile
     string accessKeyId;
     string secretKey;
     string bucketName;
+    string s3_folder;
     bool verifySsl = false;
 };
 struct OutputStreamSetting
 {
+    string name;
     string path;
     uint64_t bitrate = 4000000;
     bool rescale = false;
@@ -36,6 +45,7 @@ struct OutputStreamSetting
     shared_ptr<Options> options;
     int file_duration_sec = 90;
     S3Profile * s3_profile = nullptr;
+    NotificationEndpoint * notification_endpoint = nullptr;
 };
 struct InputStreamSetting
 {
@@ -103,19 +113,44 @@ public:
         {
             setting.file_duration_sec = node["file_duration_sec"].as<int>();
         }
+        if (node["name"].IsDefined() && !node["name"].as<string>().empty())
+        {
+            setting.name = node["name"].as<string>();
+        }
+        else
+        {
+            setting.name = uuid();
+        }
         if (node["s3_target"].IsDefined() && !node["s3_target"].as<string>().empty())
         {
             setting.s3_profile = this->getS3Profile(node["s3_target"].as<string>());
+
+            if (node["s3_folder"].IsDefined() && !node["s3_folder"].as<string>().empty())
+            {
+                string s3_folder = node["s3_folder"].as<string>();
+                if (s3_folder.back() != '/')
+                {
+                    s3_folder.append("/");
+                }
+                if (s3_folder[0] != '/')
+                {
+                    s3_folder.insert(0, "/");
+                }
+                setting.s3_profile->s3_folder = s3_folder;
+            }
         }
 
+        if (this->config["notification_endpoint"].IsDefined())
+        {
+            setting.notification_endpoint = this->getNotificationEndpoint();
+        }
         setting.options = make_shared<Options>();
         for (std::size_t j = 0; j < node["options"].size(); j++)
         {
             const auto optionItem = node["options"][j];
             setting.options->set(optionItem["key"].as<string>().c_str(), optionItem["value"].as<string>().c_str());
         }
-        //      result.emplace_back(setting);
-        //    }
+
         return setting;
     }
 
@@ -146,6 +181,21 @@ public:
         return ss.str();
     }
 
+    NotificationEndpoint * getNotificationEndpoint()
+    {
+        if (!this->config["notification_endpoint"].IsDefined())
+        {
+            return nullptr;
+        }
+
+        auto node = this->config["notification_endpoint"];
+        return new NotificationEndpoint{
+            node["url"].as<string>(),
+            node["access_key"].as<string>(),
+            node["enable_notification"].as<bool>(),
+        };
+    }
+
     S3Profile * getS3Profile(string name)
     {
         if (!this->config["s3_profiles"].IsDefined())
@@ -169,6 +219,7 @@ public:
         }
         throw runtime_error(fmt::format("{} profile name not defined.", name));
     }
+
 
     vector<StreamSetting> getStreams()
     {

@@ -27,14 +27,13 @@ class InputStream
 public:
     shared_ptr<Context> context;
     shared_ptr<Options> options;
-    //    AVCodecContext * codec_decode_context;
     AVPixelFormat pixel_format;
     int video_stream_index = 0;
     int audio_stream_index = 0;
     int64_t latest_video_pts = 0;
-    //    AVFrame * decode_frame;
     vector<int> stream_mapping;
     string source;
+    string name;
     vector<AVCodecContext *> decode_contexts;
     InputStreamSetting * input_stream_setting;
     explicit InputStream(InputStreamSetting * input_stream_setting_)
@@ -42,14 +41,9 @@ public:
     {
         Logger l(std::cout);
         this->context = std::make_shared<Context>();
-        //        decode_frame = av_frame_alloc();
         source = input_stream_setting->src;
         this->options = input_stream_setting->options;
-        //        if (!decode_frame)
-        //        {
-        //            fprintf(stderr, "Could not allocate video decode_frame\n");
-        //            exit(1);
-        //        }
+        name = input_stream_setting->name;
 
         LOG("InputStream constructor")
     }
@@ -75,7 +69,6 @@ public:
         Logger l(std::cout);
         LOG("Input stream destructor")
         avformat_close_input(&context->cntx);
-        //        av_frame_free(&decode_frame);
     }
 
     void readStreamInfo()
@@ -119,9 +112,6 @@ public:
         video_decode_context->width = context_ptr->streams[this->video_stream_index]->codecpar->width;
         video_decode_context->height = context_ptr->streams[this->video_stream_index]->codecpar->height;
 
-        //        decode_frame->format = video_decode_context->pix_fmt;
-        //        decode_frame->width = video_decode_context->width;
-        //        decode_frame->height = video_decode_context->height;
         const AVDictionaryEntry * tag = nullptr;
 
         while ((tag = av_dict_get(context_ptr->metadata, "", tag, AV_DICT_IGNORE_SUFFIX)))
@@ -151,6 +141,9 @@ public:
 
     [[nodiscard]] vector<int> getMapStreams()
     {
+        /**
+         * In input stream may by any type stream, but need write only audio and video.
+         */
         set<int> allow_codec_type = {AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_VIDEO};
         AVFormatContext * context_ptr = context->cntx;
         for (int i = 0; i < context_ptr->nb_streams; i++)

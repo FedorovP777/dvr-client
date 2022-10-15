@@ -8,7 +8,11 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-
+#include <chrono>
+#include <uuid/uuid.h>
+#include <fmt/core.h>
+#include <fmt/chrono.h>
+#include <iostream>
 using namespace std;
 
 string getFileName()
@@ -44,4 +48,25 @@ string getDateRFC5322()
     return ss.str();
 }
 
+string uuid()
+{
+    /**
+     * Make uuid
+     */
+    uuid_t out;
+    uuid_generate(out);
+    char uuid_str[37];
+    uuid_unparse_lower(out, uuid_str);
+    stringstream ss;
+    ss << uuid_str;
+    return ss.str();
+}
+
+string getISOCurrentTimestamp()
+{
+    std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    stringstream ss;
+    ss << std::put_time(std::localtime(&t), "%FT%T%z");
+    return ss.str();
+}
 #endif // LIBAV_TEST_UTILS_H

@@ -9,10 +9,17 @@
 #include <uv.h>
 #include "ConfigService.h"
 #include "S3Service.h"
+#include "NotificationService.h"
 struct UploadToS3Task
 {
     string filename;
+    string current_server_name;
+    string filename_template;
+    string camera_name;
+    string dest;
+    string dest_name;
     S3Profile * s3_profile = nullptr;
+    NotificationEndpoint * notification_endpoint = nullptr;
 };
 
 
@@ -29,16 +36,25 @@ public:
     static void uploadFile(uv_work_t * req)
     {
         auto * task = static_cast<UploadToS3Task *>(req->data);
-        cout << "thread:" << std::this_thread::get_id() << endl << "filename" << task->filename << endl;
-//        std::this_thread::sleep_for(2000ms);
-        S3Service::putObject(task->filename, task->s3_profile);
-        cout << "Complete" << endl;
+        LOG("Start upload"
+            << "thread:" << std::this_thread::get_id() << endl
+            << "filename" << task->filename)
+        auto * notification_context = new NotificationContext;
+        notification_context->result_upload_file = S3Service::putObject(task->filename, task->s3_profile);
+        notification_context->s3_profile = task->s3_profile;
+        notification_context->dest_name = task->dest_name;
+        notification_context->camera_name = task->camera_name;
+        notification_context->notification_endpoint = task->notification_endpoint;
+        cout << task->notification_endpoint->url << endl;
+        sendAsync<NotificationContext *, void (*)(uv_async_s *)>(notification_context, sendNotifyAfterUploadAsync);
+        LOG("Upload done.")
     }
+
 
     static void finishWriteFragmentAsync(uv_async_t * msg)
     {
         auto * task = static_cast<UploadToS3Task *>(msg->data);
-        cout << "cb_end_task" << task->filename << endl;
+        LOG("finishWriteFragmentAsync" << task->filename)
         uv_close(reinterpret_cast<uv_handle_t *>(msg), (uv_close_cb)free);
         auto * req = new uv_work_t;
         req->data = reinterpret_cast<void *>(task);
@@ -145,6 +161,25 @@ public:
         const int HEALTH_CHECK_JOB_INTERVAL_MS = 10 * 1000;
 
         uv_timer_start(timer_req, EventService::streamHealthCheckerJob<T1>, HEALTH_CHECK_JOB_TIMEOUT_MS, HEALTH_CHECK_JOB_INTERVAL_MS);
+    }
+    static void sendNotifyAfterUploadAsync(uv_async_t * task)
+    {
+        auto * context = reinterpret_cast<NotificationContext *>(task->data);
+        auto * req = new uv_work_t;
+        req->data = reinterpret_cast<void *>(task->data);
+        uv_close(reinterpret_cast<uv_handle_t *>(task), (uv_close_cb)free);
+        uv_queue_work(
+            uv_default_loop(),
+            req,
+            [](uv_work_t * req) {
+                auto * context = reinterpret_cast<NotificationContext *>(req->data);
+                NotificationService::successUploadFile(context);
+            },
+            [](uv_work_t * req, int status) {
+                auto * context = reinterpret_cast<NotificationContext *>(req->data);
+                delete context;
+                free(req);
+            });
     }
 };
 

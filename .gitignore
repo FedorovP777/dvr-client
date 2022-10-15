@@ -4,3 +4,7 @@ cmake-build-debug-coverage/
 output/
 docs/
 .vscode/
+_deps/
+config.yaml
+*.log
+CMakeFiles/

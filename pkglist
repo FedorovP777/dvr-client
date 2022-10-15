@@ -9,6 +9,7 @@ libavformat-dev
 libavdevice-dev
 libavfilter-dev
 libyaml-cpp-dev
+libyaml-dev
 libfmt-dev
 zlib1g-dev
 uuid-dev
@@ -18,4 +19,4 @@ libssl-dev
 zlib1g-dev 
 libpulse-dev
 git
-pvs-studio
+uuid-dev

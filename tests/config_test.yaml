@@ -8,8 +8,11 @@ streams:
         value: 'tcp'
       - key: 'buffer_size'
         value: '10'
-    dst: 
+    dst:
       - path: file-480-%Y-%m-%d-{unixtime}.ts
+        name: "test_name"
+        s3_folder: "test"
+        s3_target: "default"
         file_duration_sec: 900
         bitrate: 5000
         height: 480

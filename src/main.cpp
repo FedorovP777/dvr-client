@@ -37,8 +37,8 @@ int main(int argc, char ** argv)
         stream_workers.emplace_back(new StreamWorker(v));
         stream_workers.back()->run();
     }
-    // EventService::registerHealthCheckJob<timer_health_check_struct, vector<StreamWorker *>, StreamHealthChecker>(
-        // stream_workers, new StreamHealthChecker);
+    EventService::registerHealthCheckJob<timer_health_check_struct, vector<StreamWorker *>, StreamHealthChecker>(
+        stream_workers, new StreamHealthChecker);
 
 
     for (auto & stream_worker : stream_workers)
